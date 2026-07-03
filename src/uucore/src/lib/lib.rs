@@ -151,6 +151,7 @@ use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::wasi::ffi::{OsStrExt, OsStringExt};
 use std::str;
 use std::str::Utf8Chunk;
+use std::sync::OnceLock;
 use std::sync::{LazyLock, atomic::Ordering};
 
 /// Disables the custom signal handlers installed by Rust for stack-overflow handling. With those custom signal handlers processes ignore the first SIGBUS and SIGSEGV signal they receive.
@@ -346,48 +347,58 @@ pub fn set_utility_is_second_arg() {
     macros::UTILITY_IS_SECOND_ARG.store(true, Ordering::SeqCst);
 }
 
-// args_os() can be expensive to call, it copies all of argv before iterating.
-// So if we want only the first arg or so it's overkill. We cache it.
-#[cfg(windows)]
-static ARGV: LazyLock<Vec<OsString>> = LazyLock::new(|| wild::args_os().collect());
-#[cfg(not(windows))]
-static ARGV: LazyLock<Vec<OsString>> = LazyLock::new(|| std::env::args_os().collect());
+static UTIL_NAME: OnceLock<String> = OnceLock::new();
 
-static UTIL_NAME: LazyLock<String> = LazyLock::new(|| {
-    let base_index = usize::from(get_utility_is_second_arg());
-    let is_man = usize::from(ARGV[base_index].eq("manpage"));
-    let argv_index = base_index + is_man;
+pub fn init_util_name(input: impl AsRef<OsStr>) {
+    UTIL_NAME
+        .set(input.as_ref().to_string_lossy().into_owned())
+        .expect("UTIL_NAME already initialized");
+}
 
-    // Strip directory path to show only utility name
-    // (e.g., "mkdir" instead of "./target/debug/mkdir")
-    // in version output, error messages, and other user-facing output
-    std::path::Path::new(&ARGV[argv_index])
-        .file_name()
-        .unwrap_or(&ARGV[argv_index])
-        .to_string_lossy()
-        .into_owned()
-});
+// static UTIL_NAME: LazyLock<String> = LazyLock::new(|| {
+//     let base_index = usize::from(get_utility_is_second_arg());
+//     let is_man = usize::from(ARGV[base_index].eq("manpage"));
+//     let argv_index = base_index + is_man;
+
+//     // Strip directory path to show only utility name
+//     // (e.g., "mkdir" instead of "./target/debug/mkdir")
+//     // in version output, error messages, and other user-facing output
+//     std::path::Path::new(&ARGV[argv_index])
+//         .file_name()
+//         .unwrap_or(&ARGV[argv_index])
+//         .to_string_lossy()
+//         .into_owned()
+// });
 
 /// Derive the utility name.
 pub fn util_name() -> &'static str {
-    &UTIL_NAME
+    UTIL_NAME.get().expect("UTIL_NAME not initialized")
 }
 
-static EXECUTION_PHRASE: LazyLock<String> = LazyLock::new(|| {
-    if get_utility_is_second_arg() {
-        ARGV.iter()
-            .take(2)
-            .map(|os_str| os_str.to_string_lossy().into_owned())
-            .collect::<Vec<_>>()
-            .join(" ")
-    } else {
-        ARGV[0].to_string_lossy().into_owned()
-    }
-});
+static EXECUTION_PHRASE: OnceLock<String> = OnceLock::new();
+
+pub fn init_execution_phrase(input: impl AsRef<OsStr>) {
+    EXECUTION_PHRASE
+        .set(input.as_ref().to_string_lossy().into_owned())
+        .expect("EXECUTION_PHRASE already initialized");
+}
+// static EXECUTION_PHRASE: LazyLock<String> = LazyLock::new(|| {
+//     if get_utility_is_second_arg() {
+//         ARGV.iter()
+//             .take(2)
+//             .map(|os_str| os_str.to_string_lossy().into_owned())
+//             .collect::<Vec<_>>()
+//             .join(" ")
+//     } else {
+//         ARGV[0].to_string_lossy().into_owned()
+//     }
+// });
 
 /// Derive the complete execution phrase for "usage".
 pub fn execution_phrase() -> &'static str {
-    &EXECUTION_PHRASE
+    EXECUTION_PHRASE
+        .get()
+        .expect("EXECUTION_PHRASE not initialized")
 }
 
 /// Args contains arguments passed to the utility.
@@ -411,14 +422,21 @@ impl<T: Iterator<Item = OsString> + Sized> Args for T {}
 /// Returns an iterator over the command line arguments as `OsString`s.
 /// args_os() can be expensive to call
 pub fn args_os() -> impl Iterator<Item = OsString> {
-    ARGV.iter().cloned()
+    #[cfg(windows)]
+    {
+        wild::args_os()
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::args_os()
+    }
 }
 
 /// Returns an iterator over the command line arguments as `OsString`s, filtering out empty arguments.
 /// This is useful for handling cases where extra whitespace or empty arguments are present.
 /// args_os_filtered() can be expensive to call
 pub fn args_os_filtered() -> impl Iterator<Item = OsString> {
-    ARGV.iter().filter(|arg| !arg.is_empty()).cloned()
+    args_os().filter(|arg| !arg.is_empty())
 }
 
 /// Read a line from stdin and check whether the first character is `'y'` or `'Y'`
