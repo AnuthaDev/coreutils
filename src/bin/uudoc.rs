@@ -145,6 +145,7 @@ fn gen_manpage<T: Args>(
         .get_matches_from(std::iter::once(OsString::from("manpage")).chain(args));
 
     let utility = matches.get_one::<String>("utility").unwrap();
+    uucore::init_util_name(utility);
     let command = if utility == "coreutils" {
         gen_coreutils_app(util_map)
     } else {
@@ -229,6 +230,11 @@ fn main() -> io::Result<()> {
         let command = args.get(1).and_then(|s| s.to_str()).unwrap_or_default();
         match command {
             "manpage" => {
+                uucore::init_execution_phrase(format!(
+                    "{} {}",
+                    args[0].to_string_lossy(),
+                    args[1].to_string_lossy()
+                ));
                 let args_iter = args.into_iter().skip(2);
                 gen_manpage(
                     &mut tldr_zip,

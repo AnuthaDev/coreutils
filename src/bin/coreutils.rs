@@ -122,6 +122,17 @@ fn main() {
                 // Could be something like:
                 // #[cfg(not(feature = "only_english"))]
                 validation::setup_localization_or_exit(util);
+                if uucore::get_utility_is_second_arg() {
+                    uucore::init_util_name(&util_os);
+                    uucore::init_execution_phrase(format!(
+                        "{} {}",
+                        binary.to_string_lossy(),
+                        util_os.to_string_lossy()
+                    ));
+                } else {
+                    uucore::init_util_name(&binary);
+                    uucore::init_execution_phrase(&binary);
+                }
                 process::exit(uumain(vec![util_os].into_iter().chain(args)));
             }
             None => {

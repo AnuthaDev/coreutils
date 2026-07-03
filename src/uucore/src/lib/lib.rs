@@ -152,7 +152,7 @@ use std::os::wasi::ffi::{OsStrExt, OsStringExt};
 use std::str;
 use std::str::Utf8Chunk;
 use std::sync::OnceLock;
-use std::sync::{LazyLock, atomic::Ordering};
+use std::sync::atomic::Ordering;
 
 /// Disables the custom signal handlers installed by Rust for stack-overflow handling. With those custom signal handlers processes ignore the first SIGBUS and SIGSEGV signal they receive.
 /// See <https://github.com/rust-lang/rust/blob/8ac1525e091d3db28e67adcbbd6db1e1deaa37fb/src/libstd/sys/unix/stack_overflow.rs#L71-L92> for details.
@@ -212,7 +212,12 @@ macro_rules! bin_inner {
                 });
 
             // execute utility code
-            let code = $util::uumain(uucore::args_os());
+            let mut args = uucore::args_os().peekable();
+            if let Some(arg0) = args.peek() {
+                uucore::init_util_name(arg0);
+                uucore::init_execution_phrase(arg0);
+            }
+            let code = $util::uumain(args);
             $post
 
             std::process::exit(code);
@@ -349,56 +354,59 @@ pub fn set_utility_is_second_arg() {
 
 static UTIL_NAME: OnceLock<String> = OnceLock::new();
 
+/// Set the utility name from a raw argv value, stripping any directory path
+/// (e.g., "mkdir" instead of "./target/debug/mkdir") for version output,
+/// error messages, and other user-facing output.
+///
+/// The first call wins; later calls are ignored. If never called,
+/// [`util_name`] derives the name from the process arguments on first use.
 pub fn init_util_name(input: impl AsRef<OsStr>) {
-    UTIL_NAME
-        .set(input.as_ref().to_string_lossy().into_owned())
-        .expect("UTIL_NAME already initialized");
+    let input = input.as_ref();
+    let name = std::path::Path::new(input).file_name().unwrap_or(input);
+    let _ = UTIL_NAME.set(name.to_string_lossy().into_owned());
 }
-
-// static UTIL_NAME: LazyLock<String> = LazyLock::new(|| {
-//     let base_index = usize::from(get_utility_is_second_arg());
-//     let is_man = usize::from(ARGV[base_index].eq("manpage"));
-//     let argv_index = base_index + is_man;
-
-//     // Strip directory path to show only utility name
-//     // (e.g., "mkdir" instead of "./target/debug/mkdir")
-//     // in version output, error messages, and other user-facing output
-//     std::path::Path::new(&ARGV[argv_index])
-//         .file_name()
-//         .unwrap_or(&ARGV[argv_index])
-//         .to_string_lossy()
-//         .into_owned()
-// });
 
 /// Derive the utility name.
 pub fn util_name() -> &'static str {
-    UTIL_NAME.get().expect("UTIL_NAME not initialized")
+    UTIL_NAME.get_or_init(|| {
+        let base_index = usize::from(get_utility_is_second_arg());
+        let args: Vec<OsString> = args_os().skip(base_index).take(2).collect();
+        let is_man = usize::from(args.first().is_some_and(|arg| arg == "manpage"));
+        let arg = &args[is_man];
+
+        // Strip directory path to show only utility name
+        // (e.g., "mkdir" instead of "./target/debug/mkdir")
+        // in version output, error messages, and other user-facing output
+        std::path::Path::new(arg)
+            .file_name()
+            .unwrap_or(arg)
+            .to_string_lossy()
+            .into_owned()
+    })
 }
 
 static EXECUTION_PHRASE: OnceLock<String> = OnceLock::new();
 
+/// Set the execution phrase shown in "usage" output, e.g. `mkdir` or
+/// `coreutils mkdir`, from the raw argv value(s) used to invoke the utility.
+///
+/// The first call wins; later calls are ignored. If never called,
+/// [`execution_phrase`] derives the phrase from the process arguments on
+/// first use.
 pub fn init_execution_phrase(input: impl AsRef<OsStr>) {
-    EXECUTION_PHRASE
-        .set(input.as_ref().to_string_lossy().into_owned())
-        .expect("EXECUTION_PHRASE already initialized");
+    let _ = EXECUTION_PHRASE.set(input.as_ref().to_string_lossy().into_owned());
 }
-// static EXECUTION_PHRASE: LazyLock<String> = LazyLock::new(|| {
-//     if get_utility_is_second_arg() {
-//         ARGV.iter()
-//             .take(2)
-//             .map(|os_str| os_str.to_string_lossy().into_owned())
-//             .collect::<Vec<_>>()
-//             .join(" ")
-//     } else {
-//         ARGV[0].to_string_lossy().into_owned()
-//     }
-// });
 
 /// Derive the complete execution phrase for "usage".
 pub fn execution_phrase() -> &'static str {
-    EXECUTION_PHRASE
-        .get()
-        .expect("EXECUTION_PHRASE not initialized")
+    EXECUTION_PHRASE.get_or_init(|| {
+        let n = if get_utility_is_second_arg() { 2 } else { 1 };
+        args_os()
+            .take(n)
+            .map(|os_str| os_str.to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join(" ")
+    })
 }
 
 /// Args contains arguments passed to the utility.
@@ -420,7 +428,9 @@ pub trait Args: Iterator<Item = OsString> + Sized {
 impl<T: Iterator<Item = OsString> + Sized> Args for T {}
 
 /// Returns an iterator over the command line arguments as `OsString`s.
-/// args_os() can be expensive to call
+///
+/// Each call copies all of argv (and, on Windows, re-expands glob patterns),
+/// so call it once and reuse the result rather than calling it repeatedly.
 pub fn args_os() -> impl Iterator<Item = OsString> {
     #[cfg(windows)]
     {
@@ -434,7 +444,7 @@ pub fn args_os() -> impl Iterator<Item = OsString> {
 
 /// Returns an iterator over the command line arguments as `OsString`s, filtering out empty arguments.
 /// This is useful for handling cases where extra whitespace or empty arguments are present.
-/// args_os_filtered() can be expensive to call
+/// Like [`args_os`], each call copies all of argv, so call it once and reuse the result.
 pub fn args_os_filtered() -> impl Iterator<Item = OsString> {
     args_os().filter(|arg| !arg.is_empty())
 }
