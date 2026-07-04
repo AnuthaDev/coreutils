@@ -121,6 +121,18 @@ fn main() {
                 // binary to avoid the load of the flt
                 // Could be something like:
                 // #[cfg(not(feature = "only_english"))]
+
+                if uucore::get_utility_is_second_arg() {
+                    uucore::init_util_name(&util_os);
+                    uucore::init_execution_phrase(format!(
+                        "{} {}",
+                        binary.to_string_lossy(),
+                        util_os.to_string_lossy()
+                    ));
+                } else {
+                    uucore::init_util_name(&binary);
+                    uucore::init_execution_phrase(&binary);
+                }
                 validation::setup_localization_or_exit(util);
                 process::exit(uumain(vec![util_os].into_iter().chain(args)));
             }
