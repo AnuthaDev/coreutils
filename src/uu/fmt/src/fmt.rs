@@ -325,7 +325,7 @@ fn extract_width(matches: &ArgMatches) -> UResult<Option<usize>> {
 
 #[uucore::main]
 pub fn uumain(args: impl uucore::Args) -> UResult<()> {
-    let args: Vec<_> = args.collect();
+    let args: Vec<OsString> = args.map(|s| s.into()).collect();
 
     // Warn the user if it looks like we're trying to pass a number in the first
     // argument with non-numeric characters

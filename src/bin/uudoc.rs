@@ -219,7 +219,7 @@ fn gen_completions<T: Args>(args: impl Iterator<Item = OsString>, util_map: &Uti
 /// Returns an error if the writer fails.
 #[allow(clippy::too_many_lines)]
 fn main() -> io::Result<()> {
-    let args: Vec<OsString> = uucore::args_os_filtered().collect();
+    let args: Vec<OsString> = uucore::args_os_filtered().map(|s| s.into()).collect();
 
     let mut tldr_zip = File::open("docs/tldr.zip")
         .ok()

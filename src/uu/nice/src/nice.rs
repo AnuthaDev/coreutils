@@ -45,7 +45,7 @@ pub mod options {
 /// arguments to nice before clap starts work. Here, we insert a
 /// prefix of "-n" onto all arguments of the form "-{i}", "--{i}" and
 /// "-+{i}" which are not already preceded by "-n".
-fn standardize_nice_args(mut args: impl uucore::Args) -> impl uucore::Args {
+fn standardize_nice_args(mut args: impl Iterator<Item = OsString>) -> impl Iterator<Item = OsString> {
     let mut v = Vec::<OsString>::new();
     let mut saw_n = false;
     let mut saw_command = false;
@@ -94,7 +94,7 @@ fn standardize_nice_args(mut args: impl uucore::Args) -> impl uucore::Args {
 
 #[uucore::main]
 pub fn uumain(args: impl uucore::Args) -> UResult<()> {
-    let args = standardize_nice_args(args);
+    let args = standardize_nice_args(args.map(|s| s.into()));
 
     let matches =
         uucore::clap_localization::handle_clap_result_with_exit_code(uu_app(), args, 125)?;

@@ -156,7 +156,7 @@ pub fn update_positions(dired: &mut DiredOutput, start: usize, end: usize, line_
 /// we don't use clap here because we need to know if the argument is present
 /// as it can be overridden by --hyperlink
 pub fn is_dired_arg_present() -> bool {
-    std::env::args_os().any(|x| x == "--dired" || x == "-D")
+    uucore::args_os().any(|x| x.as_ref() == "--dired" || x.as_ref() == "-D")
 }
 
 #[cfg(test)]

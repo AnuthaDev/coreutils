@@ -888,7 +888,7 @@ pub fn chown_base(
     parse_gid_uid_and_filter: GidUidFilterOwnerParser,
     groups_only: bool,
 ) -> UResult<()> {
-    let args: Vec<_> = args.collect();
+    let args: Vec<OsString> = args.map(|s| s.into()).collect();
     let mut reference = false;
     let mut help = false;
     // stop processing options on --

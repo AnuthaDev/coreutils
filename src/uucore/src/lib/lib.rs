@@ -214,8 +214,8 @@ macro_rules! bin_inner {
             // execute utility code
             let mut args = uucore::args_os().peekable();
             if let Some(arg0) = args.peek() {
-                uucore::init_util_name(arg0);
-                uucore::init_execution_phrase(arg0);
+                uucore::init_util_name(arg0.as_ref());
+                uucore::init_execution_phrase(arg0.as_ref());
             }
             let code = $util::uumain(args);
             $post
@@ -374,11 +374,12 @@ pub fn init_util_name(input: impl AsRef<OsStr>) {
 pub fn util_name() -> &'static str {
     UTIL_NAME.get_or_init(|| {
         let base_index = usize::from(get_utility_is_second_arg());
-        let args: Vec<OsString> = args_os().skip(base_index).take(2).collect();
-        let is_man = usize::from(args.first().is_some_and(|arg| arg == "manpage"));
+        let args: Vec<_> = args_os().skip(base_index).take(2).collect();
+        let is_man = usize::from(args.first().is_some_and(|arg| arg.as_ref() == "manpage"));
         let Some(arg) = args.get(is_man) else {
             return String::new();
         };
+        let arg = arg.as_ref();
 
         // Strip directory path to show only utility name
         // (e.g., "mkdir" instead of "./target/debug/mkdir")
@@ -413,50 +414,49 @@ pub fn execution_phrase() -> &'static str {
         let n = if get_utility_is_second_arg() { 2 } else { 1 };
         args_os()
             .take(n)
-            .map(|os_str| os_str.to_string_lossy().into_owned())
+            .map(|os_str| os_str.as_ref().to_string_lossy().into_owned())
             .collect::<Vec<_>>()
             .join(" ")
     })
 }
 
 /// Args contains arguments passed to the utility.
-/// It is a trait that extends `Iterator<Item = OsString>`.
-/// It provides utility functions to collect the arguments into a `Vec<String>`.
-/// The collected `Vec<String>` can be lossy or ignore invalid encoding.
-pub trait Args: Iterator<Item = OsString> + Sized {
+pub trait Args: Iterator<Item: Into<OsString> + Clone + AsRef<OsStr>> + Sized {
     /// Collects the iterator into a `Vec<String>`, lossily converting the `OsString`s to `Strings`.
     fn collect_lossy(self) -> Vec<String> {
-        self.map(|s| s.to_string_lossy().into_owned()).collect()
+        self.map(|s| s.as_ref().to_string_lossy().into_owned()).collect()
     }
 
     /// Collects the iterator into a `Vec<String>`, removing any elements that contain invalid encoding.
     fn collect_ignore(self) -> Vec<String> {
-        self.filter_map(|s| s.into_string().ok()).collect()
+        self.filter_map(|s| s.as_ref().to_str().map(String::from)).collect()
     }
 }
 
-impl<T: Iterator<Item = OsString> + Sized> Args for T {}
+impl<T: Iterator<Item: Into<OsString> + Clone + AsRef<OsStr>> + Sized> Args for T {}
 
-/// Returns an iterator over the command line arguments as `OsString`s.
+/// Returns an iterator over the command line arguments.
 ///
-/// Each call copies all of argv (and, on Windows, re-expands glob patterns),
-/// so call it once and reuse the result rather than calling it repeatedly.
-pub fn args_os() -> impl Iterator<Item = OsString> {
+/// Returns an iterator over the command line arguments.
+///
+/// On non-Windows, yields `&'static OsStr` borrowing the kernel's argv
+/// directly (zero allocation on Linux/glibc). On Windows, yields owned
+/// `OsString` via `wild::args_os()` (with glob expansion).
+pub fn args_os() -> impl Iterator<Item = impl AsRef<OsStr> + Into<OsString> + Clone> {
     #[cfg(windows)]
     {
         wild::args_os()
     }
     #[cfg(not(windows))]
     {
-        std::env::args_os()
+        argv::iter()
     }
 }
 
-/// Returns an iterator over the command line arguments as `OsString`s, filtering out empty arguments.
+/// Returns an iterator over the command line arguments, filtering out empty arguments.
 /// This is useful for handling cases where extra whitespace or empty arguments are present.
-/// Like [`args_os`], each call copies all of argv, so call it once and reuse the result.
-pub fn args_os_filtered() -> impl Iterator<Item = OsString> {
-    args_os().filter(|arg| !arg.is_empty())
+pub fn args_os_filtered() -> impl Iterator<Item = impl AsRef<OsStr> + Into<OsString> + Clone> {
+    args_os().filter(|arg| !arg.as_ref().is_empty())
 }
 
 /// Read a line from stdin and check whether the first character is `'y'` or `'Y'`

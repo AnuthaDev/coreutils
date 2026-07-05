@@ -569,10 +569,10 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
     // Clap parsing is limited in this situation, see:
     // https://github.com/uutils/coreutils/issues/2424#issuecomment-863825242
     let args = args.into_iter().map(|x| {
-        if x == "-d=" {
-            "--delimiter==".into()
+        if x.as_ref() == "-d=" {
+            OsString::from("--delimiter==")
         } else {
-            x
+            x.into()
         }
     });
 

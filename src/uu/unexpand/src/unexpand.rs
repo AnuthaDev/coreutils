@@ -228,7 +228,7 @@ fn expand_shortcuts(args: Vec<OsString>) -> Vec<OsString> {
 #[uucore::main]
 pub fn uumain(args: impl uucore::Args) -> UResult<()> {
     let matches =
-        uucore::clap_localization::handle_clap_result(uu_app(), expand_shortcuts(args.collect()))?;
+        uucore::clap_localization::handle_clap_result(uu_app(), expand_shortcuts(args.map(|arg| arg.into()).collect()))?;
 
     unexpand(&Options::new(&matches)?)
 }

@@ -32,7 +32,7 @@ use uucore::translate;
 
 #[uucore::main]
 pub fn uumain(args: impl uucore::Args) -> UResult<()> {
-    let (args, obs_lines) = handle_obsolete(args);
+    let (args, obs_lines) = handle_obsolete(args.map(|s| s.into()));
     let matches = uucore::clap_localization::handle_clap_result(uu_app(), args)?;
 
     let settings = Settings::from(&matches, obs_lines.as_deref()).map_err(|e| {
@@ -60,7 +60,7 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
 /// `split -x300e file` would mean `split -x -l 300 -e file`
 /// `split -x300e -22 file` would mean `split -x -e -l 22 file` (last obsolete lines option wins)
 /// following GNU `split` behavior
-fn handle_obsolete(args: impl uucore::Args) -> (Vec<OsString>, Option<String>) {
+fn handle_obsolete(args: impl Iterator<Item = OsString>) -> (Vec<OsString>, Option<String>) {
     let mut obs_lines = None;
     let mut preceding_long_opt_req_value = false;
     let mut preceding_short_opt_req_value = false;

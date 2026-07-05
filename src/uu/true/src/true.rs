@@ -13,9 +13,9 @@ pub fn uumain(mut args: impl uucore::Args) -> i32 {
         return 0;
     };
 
-    let error = if flag == "--help" {
+    let error = if flag.as_ref() == "--help" {
         uu_app().print_help()
-    } else if flag == "--version" {
+    } else if flag.as_ref() == "--version" {
         // avoid uu_app for smaller binary size
         writeln!(std::io::stdout(), "true {}", crate_version!())
     } else {

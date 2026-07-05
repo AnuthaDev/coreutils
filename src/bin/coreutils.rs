@@ -72,7 +72,7 @@ fn main() {
     } else if is_coreutils || binary_as_util.ends_with("box") {
         // todo: Remove support of "*box" from binary
         uucore::set_utility_is_second_arg();
-        args.next()
+        args.next().map(|s| s.into())
     } else {
         validation::not_found(&OsString::from(binary_as_util));
     };
@@ -134,7 +134,7 @@ fn main() {
                     uucore::init_execution_phrase(&binary);
                 }
                 validation::setup_localization_or_exit(util);
-                process::exit(uumain(vec![util_os].into_iter().chain(args)));
+                process::exit(uumain(vec![util_os].into_iter().chain(args.map(|s| s.into()))));
             }
             None => {
                 // GNU coreutils --help string shows help for coreutils

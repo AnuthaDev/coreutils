@@ -966,7 +966,7 @@ impl Stater {
     fn new(matches: &ArgMatches) -> UResult<Self> {
         let files: Vec<OsString> = matches
             .get_many::<OsString>(options::FILES)
-            .map(|v| v.map(OsString::from).collect())
+            .map(|v| v.cloned().collect())
             .unwrap_or_default();
         if files.is_empty() {
             return Err(Box::new(StatError::MissingOperand) as Box<dyn UError>);

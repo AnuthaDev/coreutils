@@ -6,7 +6,7 @@
 use clap::builder::ValueParser;
 use clap::{Arg, ArgAction, Command};
 use std::env;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsStr;
 use std::io::{StdoutLock, Write, stdout};
 use uucore::error::UResult;
 use uucore::format::{FormatChar, OctalParsing, parse_escape_only};
@@ -93,32 +93,6 @@ fn is_flag(arg: &OsStr, options: &mut Options) -> bool {
     true
 }
 
-/// Processes command line arguments, separating flags from normal arguments.
-///
-/// # Returns
-///
-/// - Vector of non-flag arguments.
-/// - [`Options`], describing how the arguments should be interpreted.
-fn filter_flags(args: impl Iterator<Item = OsString>) -> (impl Iterator<Item = OsString>, Options) {
-    let mut options = Options::default();
-    let mut args = args.peekable();
-
-    // Process arguments until first non-flag is found.
-    while let Some(arg) = args.peek() {
-        // We parse flags and aggregate the options in `options`.
-        // First call to `is_flag` to return false will break the loop.
-        if is_flag(arg, &mut options) {
-            args.next();
-        } else {
-            // Not a flag. Can break out of flag-processing loop.
-            break;
-        }
-    }
-
-    // Return remaining non-flag arguments.
-    (args, options)
-}
-
 #[uucore::main]
 pub fn uumain(args: impl uucore::Args) -> UResult<()> {
     // args[0] is the name of the binary.
@@ -129,57 +103,64 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
     // From the GNU manual, on what it should do:
     //
     // > If the POSIXLY_CORRECT environment variable is set, then when
-    // > echo’s first argument is not -n it outputs option-like arguments
+    // > echo's first argument is not -n it outputs option-like arguments
     // > instead of treating them as options. For example, echo -ne hello
-    // > outputs ‘-ne hello’ instead of plain ‘hello’. Also backslash
-    // > escapes are always enabled. To echo the string ‘-n’, one of the
+    // > outputs '-ne hello' instead of plain 'hello'. Also backslash
+    // > escapes are always enabled. To echo the string '-n', one of the
     // > characters can be escaped in either octal or hexadecimal
     // > representation. For example, echo -e '\x2dn'.
     let is_posixly_correct = env::var_os("POSIXLY_CORRECT").is_some();
 
-    let (args, options): (Box<dyn Iterator<Item = OsString>>, Options) = if is_posixly_correct {
-        if args.peek().is_some_and(|arg| arg == "-n") {
-            // if POSIXLY_CORRECT is set and the first argument is the "-n" flag
-            // we filter flags normally but 'escaped' is activated nonetheless.
-            let (args, _) = filter_flags(args);
-            (
-                Box::new(args),
+    if is_posixly_correct {
+        if args.peek().is_some_and(|arg| arg.as_ref() == "-n") {
+            args.next();
+            let mut temp = Options::default();
+            while let Some(arg) = args.peek() {
+                if is_flag(arg.as_ref(), &mut temp) {
+                    args.next();
+                } else {
+                    break;
+                }
+            }
+            return execute(
+                &mut stdout().lock(),
+                args,
                 Options {
                     trailing_newline: false,
                     ..Options::posixly_correct_default()
                 },
-            )
-        } else {
-            // if POSIXLY_CORRECT is set and the first argument is not the "-n" flag
-            // we just collect all arguments as no arguments are interpreted as flags.
-            (Box::new(args), Options::posixly_correct_default())
+            );
         }
-    } else if let Some(first_arg) = args.next() {
-        if first_arg == "--help" && args.peek().is_none() {
-            // If POSIXLY_CORRECT is not set and the first argument
-            // is `--help`, GNU coreutils prints the help message.
-            //
-            // Verify this using:
-            //
-            //   POSIXLY_CORRECT=1 echo --help
-            //                     echo --help
+        return execute(
+            &mut stdout().lock(),
+            args,
+            Options::posixly_correct_default(),
+        );
+    }
+
+    if let Some(first) = args.next() {
+        if first.as_ref() == "--help" && args.peek().is_none() {
             uu_app().print_help()?;
             return Ok(());
-        } else if first_arg == "--version" && args.peek().is_none() {
+        }
+        if first.as_ref() == "--version" && args.peek().is_none() {
             writeln!(stdout(), "echo {}", crate_version!())?;
             return Ok(());
         }
 
-        // if POSIXLY_CORRECT is not set we filter the flags normally
-        let (args, options) = filter_flags(std::iter::once(first_arg).chain(args));
-        (Box::new(args), options)
-    } else {
-        (Box::new(args), Options::default())
-    };
+        let mut options = Options::default();
+        let mut args = std::iter::once(first).chain(args).peekable();
+        while let Some(arg) = args.peek() {
+            if is_flag(arg.as_ref(), &mut options) {
+                args.next();
+            } else {
+                break;
+            }
+        }
+        return execute(&mut stdout().lock(), args, options);
+    }
 
-    execute(&mut stdout().lock(), args, options)?;
-
-    Ok(())
+    execute(&mut stdout().lock(), std::iter::empty::<&OsStr>(), Options::default())
 }
 
 pub fn uu_app() -> Command {
@@ -226,11 +207,11 @@ pub fn uu_app() -> Command {
 
 fn execute(
     stdout: &mut StdoutLock,
-    args: impl Iterator<Item = OsString>,
+    args: impl Iterator<Item: AsRef<OsStr>>,
     options: Options,
 ) -> UResult<()> {
     for (i, arg) in args.into_iter().enumerate() {
-        let bytes = os_str_as_bytes(&arg)?;
+        let bytes = os_str_as_bytes(arg.as_ref())?;
 
         // Don't print a space before the first argument
         if i > 0 {

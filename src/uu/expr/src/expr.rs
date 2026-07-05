@@ -105,7 +105,7 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
     // The following usage should work without escaping hyphens: `expr -15 = 1 + 2 \* \( 3 - -4 \)`
     let args = args
         .skip(1) // Skip binary name
-        .map(os_string_to_vec)
+        .map(|s| os_string_to_vec(s.into()))
         .collect::<Result<Vec<_>, _>>()?;
 
     if args.len() == 1 && args[0] == b"--help" {

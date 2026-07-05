@@ -54,7 +54,7 @@ type RangeFloat = (ExtendedBigDecimal, ExtendedBigDecimal, ExtendedBigDecimal);
 
 /// Turn short args with attached value, for example "-s,", into two args "-s" and "," to make
 /// them work with clap.
-fn split_short_args_with_value(args: impl uucore::Args) -> impl uucore::Args {
+fn split_short_args_with_value(args: impl Iterator<Item = OsString>) -> impl Iterator<Item = OsString> {
     let mut v: Vec<OsString> = Vec::new();
 
     for arg in args {
@@ -95,7 +95,7 @@ fn select_precision(
 #[uucore::main]
 pub fn uumain(args: impl uucore::Args) -> UResult<()> {
     let matches =
-        uucore::clap_localization::handle_clap_result(uu_app(), split_short_args_with_value(args))?;
+        uucore::clap_localization::handle_clap_result(uu_app(), split_short_args_with_value(args.map(|s| s.into())))?;
 
     let numbers_option = matches.get_many::<String>(ARG_NUMBERS);
 

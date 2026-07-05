@@ -205,7 +205,7 @@ static ARG_FILES: &str = "files";
 
 #[uucore::main]
 pub fn uumain(args: impl uucore::Args) -> UResult<()> {
-    let args: Vec<OsString> = args.collect();
+    let args: Vec<OsString> = args.map(|arg| arg.into()).collect();
     let matches = uu_app()
         .try_get_matches_from(args.iter())
         .map_err(|e| handle_parse_error(e, &args))?;

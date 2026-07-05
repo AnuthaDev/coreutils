@@ -360,7 +360,7 @@ fn opt_parsed(opt_name: &str, matches: &ArgMatches) -> UResult<Option<usize>> {
 /// `uniq +1 -s2 file` would equal `uniq -s2 file`
 /// `uniq -s2 +3 file` would equal `uniq -s3 file`
 ///
-fn handle_obsolete(args: impl uucore::Args) -> (Vec<OsString>, Option<usize>, Option<usize>) {
+fn handle_obsolete(args: impl Iterator<Item = OsString>) -> (Vec<OsString>, Option<usize>, Option<usize>) {
     let mut skip_fields_old = None;
     let mut skip_chars_old = None;
     let mut preceding_long_opt_req_value = false;
@@ -642,7 +642,7 @@ fn map_clap_errors(clap_error: Error) -> Box<dyn UError> {
 
 #[uucore::main]
 pub fn uumain(args: impl uucore::Args) -> UResult<()> {
-    let (args, skip_fields_old, skip_chars_old) = handle_obsolete(args);
+    let (args, skip_fields_old, skip_chars_old) = handle_obsolete(args.map(|s| s.into()));
 
     let matches = match uu_app().try_get_matches_from(args) {
         Ok(matches) => matches,

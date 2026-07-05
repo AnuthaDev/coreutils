@@ -701,7 +701,7 @@ impl EnvAppData {
         &mut self,
         original_args: impl uucore::Args,
     ) -> Result<ParsedArguments, Box<dyn UError>> {
-        let original_args: Vec<OsString> = original_args.collect();
+        let original_args: Vec<OsString> = original_args.map(|arg| arg.into()).collect();
         let args = self.process_all_string_arguments(&original_args)?;
         #[cfg(unix)]
         let mut signal_apply_all = BTreeSet::new();

@@ -78,10 +78,9 @@ fn get_canonical_util_name(util_name: &str) -> &str {
     not(any(target_os = "linux", target_os = "android")),
     target_env = "musl"
 ))]
-pub fn binary_path(args: &mut impl Iterator<Item = OsString>) -> PathBuf {
+pub fn binary_path(args: &mut impl Iterator<Item = impl AsRef<OsStr>>) -> PathBuf {
     match args.next() {
-        Some(ref s) if !s.is_empty() => PathBuf::from(s),
-        // the fallback is valid only for hardlinks
+        Some(ref s) if !s.as_ref().is_empty() => PathBuf::from(s.as_ref()),
         _ => std::env::current_exe().unwrap(),
     }
 }
@@ -91,7 +90,7 @@ pub fn binary_path(args: &mut impl Iterator<Item = OsString>) -> PathBuf {
     any(target_os = "linux", target_os = "android"),
     not(target_env = "musl")
 ))]
-pub fn binary_path(args: &mut impl Iterator<Item = OsString>) -> PathBuf {
+pub fn binary_path(args: &mut impl Iterator<Item = impl AsRef<OsStr>>) -> PathBuf {
     use std::fs::File;
     use std::io::Read;
     use std::os::unix::ffi::OsStrExt;
@@ -99,6 +98,7 @@ pub fn binary_path(args: &mut impl Iterator<Item = OsString>) -> PathBuf {
     let execfn_bytes = execfn.to_bytes();
     let exec_path = Path::new(OsStr::from_bytes(execfn_bytes));
     let argv0 = args.next().unwrap();
+    let argv0 = argv0.as_ref();
     let mut shebang_buf = [0u8; 2];
     // exec_path is wrong when called from shebang or memfd_create (/proc/self/fd/*)
     // argv0 is not full-path when called from PATH
@@ -109,7 +109,7 @@ pub fn binary_path(args: &mut impl Iterator<Item = OsString>) -> PathBuf {
             .is_ok()
             && &shebang_buf == b"#!")
     {
-        argv0.into()
+        PathBuf::from(argv0)
     } else {
         exec_path.into()
     }

@@ -44,9 +44,9 @@ pub fn uu_app() -> Command {
 
 #[uucore::main(no_signals)]
 pub fn uumain(mut args: impl uucore::Args) -> UResult<()> {
-    let program = args.next().unwrap_or_else(|| OsString::from("test"));
+    let program: OsString = args.next().map(|s| s.into()).unwrap_or_else(|| OsString::from("test"));
     let binary_name = uucore::util_name();
-    let mut args: Vec<_> = args.collect();
+    let mut args: Vec<OsString> = args.map(|s| s.into()).collect();
 
     if binary_name.ends_with('[') {
         // If invoked as [ we should recognize --help and --version (but not -h or -v)

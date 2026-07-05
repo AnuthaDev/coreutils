@@ -101,7 +101,7 @@ impl Mode {
 }
 
 fn arg_iterate<'a>(
-    mut args: impl uucore::Args + 'a,
+    mut args: impl Iterator<Item = OsString> + 'a,
 ) -> HeadResult<Box<dyn Iterator<Item = OsString> + 'a>> {
     // argv[0] is always present
     let first = args.next().unwrap();
@@ -537,6 +537,7 @@ fn uu_head(options: &HeadOptions) -> UResult<()> {
 
 #[uucore::main]
 pub fn uumain(args: impl uucore::Args) -> UResult<()> {
+    let args = args.map(|s| s.into());
     let args: Vec<_> = arg_iterate(args)?.collect();
     let matches = uucore::clap_localization::handle_clap_result(uu_app(), args)?;
     let options = HeadOptions::get_from(&matches).map_err(HeadError::MatchOption)?;
@@ -552,7 +553,7 @@ mod tests {
 
     fn options(args: &str) -> Result<HeadOptions, String> {
         let combined = "head ".to_owned() + args;
-        let args = combined.split_whitespace().map(OsString::from);
+        let args = combined.split_whitespace().map(|s| s.into());
         let matches = uu_app()
             .get_matches_from(arg_iterate(args).map_err(|_| String::from("Arg iterate failed"))?);
         HeadOptions::get_from(&matches)
@@ -613,7 +614,7 @@ mod tests {
     }
 
     fn arg_outputs(src: &str) -> Result<String, ()> {
-        let split = src.split_whitespace().map(OsString::from);
+        let split = src.split_whitespace().map(|s| s.into());
         match arg_iterate(split) {
             Ok(args) => {
                 let vec = args

@@ -400,7 +400,7 @@ fn parse_num(src: &str) -> Result<Signum, ParseSizeError> {
 }
 
 pub fn parse_args(args: impl uucore::Args) -> UResult<Settings> {
-    let args_vec: Vec<OsString> = args.collect();
+    let args_vec: Vec<OsString> = args.map(|arg| arg.into()).collect();
     let clap_args = uu_app().try_get_matches_from(args_vec.clone());
     let clap_result = match clap_args {
         Ok(matches) => Ok(Settings::from(&matches)?),
